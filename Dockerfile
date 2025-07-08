@@ -13,8 +13,6 @@ COPY ./weekly_stockprice/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 5. 필요한 소스코드 복사
-# 루트에서 weekly_db와 weekly_stockprice 폴더를 각각 복사합니다.
-COPY ./weekly_db /app/weekly_db
 COPY ./weekly_stockprice /app/weekly_stockprice
 
 # 6. 최종 작업 디렉토리 변경
