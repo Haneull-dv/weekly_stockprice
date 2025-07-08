@@ -7,20 +7,17 @@ ENV PYTHONUNBUFFERED=1
 # 3. 작업 디렉토리 설정
 WORKDIR /app
 
-# 4. 의존성 파일 먼저 복사 및 설치
-# 빌드 기준이 루트(.)이므로, weekly_stockprice 폴더 안의 파일을 지정해야 합니다.
-COPY ./weekly_stockprice/requirements.txt .
+# 4. 의존성 파일 복사 및 설치
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. 필요한 소스코드 복사
-COPY ./weekly_stockprice /app/weekly_stockprice
+# 5. 소스코드 복사
+COPY . /app
 
-# 6. 최종 작업 디렉토리 변경
-# CMD 명령어를 실행할 위치를 /app/weekly_stockprice 로 지정합니다.
-WORKDIR /app/weekly_stockprice
+# 6. 작업 디렉토리 변경
+WORKDIR /app
 
 # 7. 애플리케이션 실행
-# uvicorn은 현재 작업 디렉토리(/app/weekly_stockprice) 기준으로 app.main을 찾습니다.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9006"]
 
 # 8. 포트 노출
