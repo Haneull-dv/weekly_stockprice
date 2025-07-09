@@ -2,8 +2,8 @@ from typing import List, Optional
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..model.stockprice_model import StockPriceModel, DailyStockDataModel
-from ..schema.stockprice_schema import WeeklyStockPriceCreate, WeeklyStockPriceUpdate
+from app.domain.model.stockprice_model import StockPriceModel, DailyStockDataModel
+from app.domain.schema.stockprice_schema import WeeklyStockPriceCreate, WeeklyStockPriceUpdate
 
 
 class StockPriceRepository:

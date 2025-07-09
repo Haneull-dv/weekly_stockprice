@@ -6,11 +6,11 @@ from typing import List
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
-from weekly_db.db.db_builder import get_db_session
+from app.config.db.db_builder import get_db_session
 
 # 서비스 모듈 import
 from app.domain.controller.stockprice_controller import StockPriceController
-from ..domain.schema.stockprice_schema import (
+from app.domain.schema.stockprice_schema import (
     WeeklyStockPriceResponse,
     StockPriceListResponse,
     GameCompaniesResponse

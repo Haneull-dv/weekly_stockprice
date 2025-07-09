@@ -18,7 +18,7 @@ COPY . /app
 WORKDIR /app
 
 # 7. 애플리케이션 실행
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9006"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9006", "--reload"]
 
 # 8. 포트 노출
 EXPOSE 9006

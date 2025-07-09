@@ -8,7 +8,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 # DB 테이블 생성을 위한 import 추가
-from weekly_db.db.db_singleton import db_singleton
+from app.config.db.db_singleton import db_singleton
 from app.domain.model.stockprice_model import Base
 
 # 라우터 import

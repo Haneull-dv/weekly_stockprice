@@ -15,16 +15,17 @@ import logging
 import httpx
 import sys
 import os
+from sqlalchemy import select
 
 # 프로젝트 루트 추가 (weekly_db 모듈 접근)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # 도메인 서비스 import
 from app.domain.controller.stockprice_controller import StockPriceController
-from weekly_db.db.db_builder import get_db_session
+from app.config.db.db_builder import get_db_session
 
 # 주차 계산 utility import
-from weekly_db.db.weekly_unified_model import WeeklyDataModel
+from app.domain.model.weekly_model import WeeklyDataModel
 
 # Config 직접 정의 (import 이슈 회피)
 GAME_COMPANIES = {
@@ -69,18 +70,18 @@ async def collect_stockprice_with_cqrs(
         # ==========================================
         # 1. 배치 작업 시작 로그 (CQRS Monitoring)
         # ==========================================
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            batch_start_response = await client.post(
-                "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
-                params={
-                    "week": week,
-                    "action": "start_job"
-                }
-            )
-            batch_start_result = batch_start_response.json()
-            job_id = batch_start_result.get("job_id")
+        # async with httpx.AsyncClient(timeout=30.0) as client:
+        #     batch_start_response = await client.post(
+        #         "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
+        #         params={
+        #             "week": week,
+        #             "action": "start_job"
+        #         }
+        #     )
+        #     batch_start_result = batch_start_response.json()
+        #     job_id = batch_start_result.get("job_id")
             
-            logger.info(f"📝 [CQRS] 배치 작업 시작 로그 - Job ID: {job_id}")
+            # logger.info(f"📝 [CQRS] 배치 작업 시작 로그 - Job ID: {job_id}")
         
         # ==========================================
         # 2. Command Side: 로컬 도메인 테이블에 저장
@@ -97,7 +98,10 @@ async def collect_stockprice_with_cqrs(
         # 로컬 테이블 저장 통계
         local_updated = 0
         local_skipped = 0
-        projection_data = []  # weekly_data로 보낼 projection 데이터
+        projection_saved = 0
+        projection_skipped = 0
+        projection_errors = 0
+        week_year, week_number = WeeklyDataModel.get_week_info(week)
         
         # ==========================================
         # 3. 로컬 테이블 저장 및 Projection 데이터 준비
@@ -133,12 +137,29 @@ async def collect_stockprice_with_cqrs(
                     if stock.weekHigh and stock.weekLow:
                         content += f", 주간 고가: {stock.weekHigh:,}원, 주간 저가: {stock.weekLow:,}원"
                 
-                # Projection용 데이터 준비 (weekly_data 테이블로 전송할 형태)
-                projection_item = {
-                    "company_name": company_name,
-                    "content": content,
-                    "stock_code": stock_code or stock.symbol,
-                    "metadata": {
+                # 중복 체크
+                stmt = select(WeeklyDataModel).where(
+                    WeeklyDataModel.company_name == company_name,
+                    WeeklyDataModel.category == 'stockprice',
+                    WeeklyDataModel.week == week
+                )
+                result = await db.execute(stmt)
+                exists = result.scalar_one_or_none()
+                if exists:
+                    logger.warning(f"이미 저장된 데이터: {company_name} - stockprice - {week}")
+                    projection_skipped += 1
+                    continue
+                # Projection 저장
+                projection = WeeklyDataModel(
+                    company_name=company_name,
+                    content=content,
+                    category='stockprice',
+                    collected_at=datetime.now(),
+                    week=week,
+                    week_year=week_year,
+                    week_number=week_number,
+                    stock_code=stock_code or stock.symbol,
+                    extra_data={
                         "market_cap": stock.marketCap,
                         "today_price": stock.today,
                         "last_week_price": stock.lastWeek,
@@ -152,34 +173,34 @@ async def collect_stockprice_with_cqrs(
                         "source": "stock_crawler",
                         "cqrs_pattern": "command_to_projection"
                     }
-                }
-                
-                projection_data.append(projection_item)
-                
-                logger.debug(f"✅ [CQRS Command] 로컬 저장 및 Projection 준비: {company_name}")
+                )
+                db.add(projection)
+                projection_saved += 1
+                logger.debug(f"✅ [CQRS Command] Projection 저장: {company_name}")
                 
             except Exception as e:
-                logger.error(f"❌ [CQRS Command] 개별 주가 처리 실패: {str(e)}")
-                local_skipped += 1
+                logger.error(f"❌ [CQRS Command] Projection 저장 실패: {str(e)}")
+                projection_errors += 1
+        await db.commit()
         
         # ==========================================
         # 4. Projection: weekly_data 테이블로 전송
         # ==========================================
         
-        logger.info(f"🔄 [CQRS Projection] weekly_data로 projection 시작 - {len(projection_data)}건")
+        # logger.info(f"🔄 [CQRS Projection] weekly_data로 projection 시작 - {len(projection_data)}건")
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            projection_response = await client.post(
-                "http://weekly_data:8091/weekly-cqrs/project-domain-data",
-                params={
-                    "category": "stockprice", 
-                    "week": week
-                },
-                json=projection_data
-            )
-            projection_result = projection_response.json()
+        # async with httpx.AsyncClient(timeout=60.0) as client:
+        #     projection_response = await client.post(
+        #         "http://weekly_data:8091/weekly-cqrs/project-domain-data",
+        #         params={
+        #             "category": "stockprice", 
+        #             "week": week
+        #         },
+        #         json=projection_data
+        #     )
+        #     projection_result = projection_response.json()
             
-            logger.info(f"✅ [CQRS Projection] Projection 완료 - Updated: {projection_result.get('updated', 0)}")
+        #     logger.info(f"✅ [CQRS Projection] Projection 완료 - Updated: {projection_result.get('updated', 0)}")
         
         # ==========================================
         # 5. 배치 작업 완료 로그
@@ -191,9 +212,8 @@ async def collect_stockprice_with_cqrs(
         
         final_result = {
             "local_updated": local_updated,
-            "local_skipped": local_skipped,
-            "projection_updated": projection_result.get("updated", 0),
-            "projection_skipped": projection_result.get("skipped", 0),
+            "projection_saved": projection_saved,
+            "projection_errors": projection_errors,
             "total_collected": len(stockprice_results),
             "stockprice_stats": {
                 "successful_count": len(successful_stocks),
@@ -202,20 +222,20 @@ async def collect_stockprice_with_cqrs(
             }
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(
-                "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
-                params={
-                    "week": week,
-                    "action": "finish_job"
-                },
-                json={
-                    "job_id": job_id,
-                    "result": final_result
-                }
-            )
+        # async with httpx.AsyncClient(timeout=30.0) as client:
+        #     await client.post(
+        #         "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
+        #         params={
+        #             "week": week,
+        #             "action": "finish_job"
+        #         },
+        #         json={
+        #             "job_id": job_id,
+        #             "result": final_result
+        #         }
+        #     )
             
-            logger.info(f"📝 [CQRS] 배치 작업 완료 로그 - Job ID: {job_id}")
+            # logger.info(f"📝 [CQRS] 배치 작업 완료 로그 - Job ID: {job_id}")
         
         # ==========================================
         # 6. 최종 응답
@@ -227,19 +247,16 @@ async def collect_stockprice_with_cqrs(
             "cqrs_pattern": "command_side_completed",
             "local_storage": {
                 "updated": local_updated,
-                "skipped": local_skipped,
                 "table": "stockprices"
             },
             "projection": {
-                "updated": projection_result.get("updated", 0),
-                "skipped": projection_result.get("skipped", 0),
+                "saved": projection_saved,
+                "errors": projection_errors,
                 "table": "weekly_data"
             },
             "total_companies": TOTAL_COMPANIES,
             "total_collected": len(stockprice_results),
-            "stockprice_stats": final_result["stockprice_stats"],
-            "job_id": job_id,
-            "collected_at": datetime.now(timezone.utc).isoformat()
+            "stockprice_stats": final_result["stockprice_stats"]
         }
         
     except Exception as e:
@@ -247,22 +264,22 @@ async def collect_stockprice_with_cqrs(
         logger.error(f"❌ [CQRS Command] {error_message}")
         
         # 배치 작업 실패 로그
-        if job_id:
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    await client.post(
-                        "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
-                        params={
-                            "week": week,
-                            "action": "fail_job"
-                        },
-                        json={
-                            "job_id": job_id,
-                            "error": error_message
-                        }
-                    )
-            except:
-                pass
+        # if job_id:
+        #     try:
+        #         async with httpx.AsyncClient(timeout=30.0) as client:
+        #             await client.post(
+        #                 "http://weekly_data:8091/weekly-cqrs/domain-command/stockprice",
+        #                 params={
+        #                     "week": week,
+        #                     "action": "fail_job"
+        #                 },
+        #                 json={
+        #                     "job_id": job_id,
+        #                     "error": error_message
+        #                 }
+        #             )
+        #     except:
+        #         pass
         
         raise HTTPException(
             status_code=500,
