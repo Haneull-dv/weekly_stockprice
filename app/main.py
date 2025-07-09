@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -59,5 +60,5 @@ app.include_router(cqrs_stockprice_router, tags=["CQRS 주가"])
 print(f"🤍0. 메인 진입 - 주가 서비스 시작 (DI 기반)")
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 9006))  # 로컬은 9006, 배포는 8080
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)
