@@ -3,6 +3,7 @@ FROM python:3.10-slim
 
 # 2. 환경 변수 설정
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app  
 
 # 3. 작업 디렉토리 설정
 WORKDIR /app
@@ -18,7 +19,7 @@ COPY . /app
 WORKDIR /app
 
 # 7. 애플리케이션 실행
-CMD ["python", "main.py"]
+CMD ["python", "app/main.py"]
 
 # 8. 포트 노출
 EXPOSE 9006
