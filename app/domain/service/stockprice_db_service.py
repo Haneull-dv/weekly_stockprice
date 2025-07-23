@@ -39,9 +39,23 @@ class StockPriceDbService:
         # WeeklyStockPriceResponse 형태로 변환
         stock_data = []
         for stock in stock_prices:
+            # stock.symbol이 기업명인 경우 종목코드 찾기
+            stock_code = None
+            company_name = stock.symbol
+            
+            # 기업명으로 종목코드 찾기
+            for code, name in GAME_COMPANIES.items():
+                if name == stock.symbol:
+                    stock_code = code
+                    break
+            
+            # 종목코드를 찾지 못한 경우 원본 symbol 사용
+            if not stock_code:
+                stock_code = stock.symbol
+                
             stock_data.append(WeeklyStockPriceResponse(
-                symbol=stock.symbol,
-                companyName=stock.symbol,
+                symbol=stock_code,  # 종목코드로 반환
+                companyName=company_name,  # 기업명으로 반환
                 marketCap=stock.market_cap,
                 today=stock.today,
                 lastWeek=stock.last_week,
@@ -70,9 +84,23 @@ class StockPriceDbService:
         if not stock:
             return None
         
+        # stock.symbol이 기업명인 경우 종목코드 찾기
+        stock_code = None
+        company_name = stock.symbol
+        
+        # 기업명으로 종목코드 찾기
+        for code, name in GAME_COMPANIES.items():
+            if name == stock.symbol:
+                stock_code = code
+                break
+        
+        # 종목코드를 찾지 못한 경우 원본 symbol 사용
+        if not stock_code:
+            stock_code = stock.symbol
+        
         return WeeklyStockPriceResponse(
-            symbol=stock.symbol,
-            companyName=stock.symbol,
+            symbol=stock_code,  # 종목코드로 반환
+            companyName=company_name,  # 기업명으로 반환
             marketCap=stock.market_cap,
             today=stock.today,
             lastWeek=stock.last_week,
@@ -92,9 +120,23 @@ class StockPriceDbService:
         if not stock:
             return None
         
+        # stock.symbol이 기업명인 경우 종목코드 찾기
+        stock_code = None
+        company_name = stock.symbol
+        
+        # 기업명으로 종목코드 찾기
+        for code, name in GAME_COMPANIES.items():
+            if name == stock.symbol:
+                stock_code = code
+                break
+        
+        # 종목코드를 찾지 못한 경우 원본 symbol 사용
+        if not stock_code:
+            stock_code = stock.symbol
+
         return WeeklyStockPriceResponse(
-            symbol=stock.symbol,
-            companyName=stock.symbol,
+            symbol=stock_code,  # 종목코드로 반환
+            companyName=company_name,  # 기업명으로 반환
             marketCap=stock.market_cap,
             today=stock.today,
             lastWeek=stock.last_week,
@@ -111,10 +153,26 @@ class StockPriceDbService:
         print("🗄️ [DB] 모든 종목 최신 주가 조회")
         
         stocks = await self.repository.get_all_latest_prices()
-        return [
-            WeeklyStockPriceResponse(
-                symbol=stock.symbol,
-                companyName=stock.symbol,
+        result = []
+        
+        for stock in stocks:
+            # stock.symbol이 기업명인 경우 종목코드 찾기
+            stock_code = None
+            company_name = stock.symbol
+            
+            # 기업명으로 종목코드 찾기
+            for code, name in GAME_COMPANIES.items():
+                if name == stock.symbol:
+                    stock_code = code
+                    break
+            
+            # 종목코드를 찾지 못한 경우 원본 symbol 사용
+            if not stock_code:
+                stock_code = stock.symbol
+                
+            result.append(WeeklyStockPriceResponse(
+                symbol=stock_code,  # 종목코드로 반환
+                companyName=company_name,  # 기업명으로 반환
                 marketCap=stock.market_cap,
                 today=stock.today,
                 lastWeek=stock.last_week,
@@ -124,19 +182,35 @@ class StockPriceDbService:
                 error=stock.error,
                 thisFridayDate=stock.this_friday_date,
                 lastFridayDate=stock.last_friday_date
-            )
-            for stock in stocks
-        ]
+            ))
+        
+        return result
     
     async def get_by_symbols(self, symbols: List[str]) -> List[WeeklyStockPriceResponse]:
         """여러 종목 심볼로 최신 주가 정보 조회"""
         print(f"🗄️ [DB] 복수 종목 주가 조회 - {len(symbols)}개")
         
         stocks = await self.repository.get_by_symbols(symbols)
-        return [
-            WeeklyStockPriceResponse(
-                symbol=stock.symbol,
-                companyName=stock.symbol,
+        result = []
+        
+        for stock in stocks:
+            # stock.symbol이 기업명인 경우 종목코드 찾기
+            stock_code = None
+            company_name = stock.symbol
+            
+            # 기업명으로 종목코드 찾기
+            for code, name in GAME_COMPANIES.items():
+                if name == stock.symbol:
+                    stock_code = code
+                    break
+            
+            # 종목코드를 찾지 못한 경우 원본 symbol 사용
+            if not stock_code:
+                stock_code = stock.symbol
+                
+            result.append(WeeklyStockPriceResponse(
+                symbol=stock_code,  # 종목코드로 반환
+                companyName=company_name,  # 기업명으로 반환
                 marketCap=stock.market_cap,
                 today=stock.today,
                 lastWeek=stock.last_week,
@@ -146,9 +220,9 @@ class StockPriceDbService:
                 error=stock.error,
                 thisFridayDate=stock.this_friday_date,
                 lastFridayDate=stock.last_friday_date
-            )
-            for stock in stocks
-        ]
+            ))
+        
+        return result
     
     async def get_top_gainers(self, limit: int = 10) -> List[WeeklyStockPriceResponse]:
         """상승률 상위 종목 조회"""
@@ -348,9 +422,24 @@ class StockPriceDbService:
         print(f"🗄️ [DB] 주가 정보 업서트 - 심볼: {stockprice_data.symbol}")
         
         stock = await self.repository.upsert_by_symbol(stockprice_data)
+        
+        # stock.symbol이 기업명인 경우 종목코드 찾기
+        stock_code = None
+        company_name = stock.symbol
+        
+        # 기업명으로 종목코드 찾기
+        for code, name in GAME_COMPANIES.items():
+            if name == stock.symbol:
+                stock_code = code
+                break
+        
+        # 종목코드를 찾지 못한 경우 원본 symbol 사용
+        if not stock_code:
+            stock_code = stock.symbol
+        
         return WeeklyStockPriceResponse(
-            symbol=stock.symbol,
-            companyName=stock.symbol,
+            symbol=stock_code,  # 종목코드로 반환
+            companyName=company_name,  # 기업명으로 반환
             marketCap=stock.market_cap,
             today=stock.today,
             lastWeek=stock.last_week,

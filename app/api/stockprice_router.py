@@ -10,6 +10,7 @@ from app.config.db.db_builder import get_db_session
 
 # 서비스 모듈 import
 from app.domain.controller.stockprice_controller import StockPriceController
+from app.domain.service.fallback_service import StockPriceFallbackService
 from app.domain.schema.stockprice_schema import (
     WeeklyStockPriceResponse,
     StockPriceListResponse,
@@ -91,17 +92,42 @@ async def get_all_stocks_from_db(
     page_size: int = Query(20, description="페이지 크기"),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """📊 DB에서 모든 주가 정보 조회"""
+    """📊 DB에서 모든 주가 정보 조회 (DB 실패 시 fallback 데이터 제공)"""
     print(f"🤍1. DB 주가 조회 라우터 진입 - 페이지: {page}")
     
+    # Fallback 서비스 초기화
+    fallback_service = StockPriceFallbackService()
+    
     try:
-        controller = StockPriceController(db_session=db)
-        result = await controller.get_all_stocks_from_db(page=page, page_size=page_size)
-        print("🤍2. DB 주가 조회 라우터 - 컨트롤러 호출 완료")
-        return result
+        # 1. DB 연결 상태 확인 (1초 timeout)
+        db_available = await fallback_service.check_db_connection(db)
+        
+        if db_available:
+            # 2. DB 연결 성공 시 정상 로직 실행
+            print("✅ [DB] 연결 성공 - 정상 데이터 제공")
+            controller = StockPriceController(db_session=db)
+            result = await controller.get_all_stocks_from_db(page=page, page_size=page_size)
+            print("🤍2. DB 주가 조회 라우터 - 컨트롤러 호출 완료")
+            return result
+        else:
+            # 3. DB 연결 실패 시 fallback 데이터 제공
+            print("📁 [Fallback] DB 연결 실패 - fallback 데이터 제공")
+            fallback_result = await fallback_service.get_fallback_stock_list(page=page, page_size=page_size)
+            print("📁 [Fallback] fallback 데이터 제공 완료")
+            return fallback_result
+            
     except Exception as e:
         print(f"❌ DB 주가 조회 라우터 에러: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"DB 주가 조회 중 오류 발생: {str(e)}")
+        
+        # 4. 예외 발생 시에도 fallback 시도
+        try:
+            print("📁 [Fallback] 예외 발생으로 fallback 데이터 시도")
+            fallback_result = await fallback_service.get_fallback_stock_list(page=page, page_size=page_size)
+            print("📁 [Fallback] 예외 시 fallback 데이터 제공 완료")
+            return fallback_result
+        except Exception as fallback_error:
+            print(f"❌ [Fallback] fallback도 실패: {str(fallback_error)}")
+            raise HTTPException(status_code=500, detail=f"DB 및 fallback 모두 실패: 원본 오류={str(e)}, fallback 오류={str(fallback_error)}")
 
 @router.get("/db/top-gainers", response_model=List[WeeklyStockPriceResponse])
 async def get_top_gainers_from_db(

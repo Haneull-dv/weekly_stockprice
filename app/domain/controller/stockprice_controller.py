@@ -34,7 +34,10 @@ class StockPriceController:
         if self.db_service and not stock_data.error:
             try:
                 # 기업코드를 기업명으로 변환
+                print(f"🔍 [디버깅] stock_data.symbol: {stock_data.symbol}")
+                print(f"🔍 [디버깅] COMPANY_INFO에서 찾은 정보: {COMPANY_INFO.get(stock_data.symbol, {})}")
                 company_name = COMPANY_INFO.get(stock_data.symbol, {}).get('name', stock_data.symbol)
+                print(f"🔍 [디버깅] 변환된 company_name: {company_name}")
                 
                 # 주가 데이터를 DB 저장용 스키마로 변환
                 stock_create = WeeklyStockPriceCreate(

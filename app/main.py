@@ -28,6 +28,7 @@ async def startup_event():
         await conn.run_sync(Base.metadata.create_all)
     print("🗄️ StockPrice 테이블 생성 완료")
 
+
 ENV = os.getenv("ENV", "development")  # 기본값 development
 
 if ENV == "production":
